@@ -13,4 +13,7 @@ export const env = {
   firebaseProjectId: process.env.FIREBASE_PROJECT_ID || '',
   firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
   firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY || '',
+  firebaseApiKey: process.env.FIREBASE_API_KEY || '',
+  firebaseAuthDomain: process.env.FIREBASE_AUTH_DOMAIN || '',
+  firebaseAppId: process.env.FIREBASE_APP_ID || '',
 }

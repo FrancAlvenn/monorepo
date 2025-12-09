@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { login, refresh, loginMiddlewares } from '../controllers/authController.js'
+import { login, refresh, loginMiddlewares, signup, me, logout } from '../controllers/authController.js'
 import cookieParser from 'cookie-parser'
 import { csrfProtection } from '../middlewares/csrf.js'
 
@@ -11,4 +11,7 @@ router.get('/csrf', csrfProtection, (req, res) => {
 })
 router.post('/login', csrfProtection, ...loginMiddlewares, login)
 router.post('/refresh', csrfProtection, refresh)
+router.post('/signup', csrfProtection, signup)
+router.get('/me', me)
+router.post('/logout', csrfProtection, logout)
 export default router

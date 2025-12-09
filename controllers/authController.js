@@ -1,4 +1,4 @@
-import { getUserByEmail, createRefreshToken, findRefreshToken, revokeRefreshToken, updateUser } from '../services/firestore.js'
+import { getUserByEmail, createRefreshToken, findRefreshToken, revokeRefreshToken, updateUser, createUser } from '../services/firestore.js'
 import { env } from '../config/env.js'
 import jwt from 'jsonwebtoken'
 import { v4 as uuidv4 } from 'uuid'
@@ -49,13 +49,21 @@ export async function login(req, res) {
   const expires = jwt.decode(accessToken).exp * 1000
   const rtExp = jwt.decode(refreshToken).exp * 1000
   await createRefreshToken({ userId: user.id, jti: refreshJti, expiresAt: new Date(rtExp) })
-  res.json({ accessToken, refreshToken, expiresAt: expires, user: { id: user.id, email: user.email } })
+  res.cookie('refresh_token', refreshToken, {
+    httpOnly: true,
+    secure: env.nodeEnv === 'production',
+    sameSite: 'lax',
+    maxAge: rtExp - Date.now(),
+    path: '/',
+  })
+  res.json({ accessToken, expiresAt: expires, user: { id: user.id, email: user.email } })
 }
 
 export async function refresh(req, res) {
   const { refreshToken } = req.body || {}
   const headerToken = req.headers['x-refresh-token']
-  const tokenValue = refreshToken || headerToken
+  const cookieToken = req.cookies?.refresh_token
+  const tokenValue = refreshToken || headerToken || cookieToken
   if (!tokenValue) return res.status(400).json({ message: 'Missing refresh token' })
   try {
     const payload = jwt.verify(tokenValue, env.jwtRefreshSecret)
@@ -69,8 +77,50 @@ export async function refresh(req, res) {
     const expires = jwt.decode(accessToken).exp * 1000
     const rtExp = jwt.decode(newRefreshToken).exp * 1000
     await createRefreshToken({ userId: payload.sub, jti: newRefreshJti, expiresAt: new Date(rtExp) })
-    res.json({ accessToken, refreshToken: newRefreshToken, expiresAt: expires, user: { id: payload.sub } })
+    res.cookie('refresh_token', newRefreshToken, {
+      httpOnly: true,
+      secure: env.nodeEnv === 'production',
+      sameSite: 'lax',
+      maxAge: rtExp - Date.now(),
+      path: '/',
+    })
+    res.json({ accessToken, expiresAt: expires, user: { id: payload.sub } })
   } catch {
     res.status(401).json({ message: 'Invalid refresh token' })
   }
+}
+
+export async function signup(req, res) {
+  const { email, password, displayName } = req.body || {}
+  if (!validateEmail(email)) return res.status(400).json({ message: 'Invalid email' })
+  if (!validatePassword(password)) return res.status(400).json({ message: 'Weak password' })
+  const existing = await getUserByEmail(email)
+  if (existing) return res.status(409).json({ message: 'Email already in use' })
+  const user = await createUser({ email, password })
+  res.status(201).json({ user: { id: user.id, email: user.email, displayName: displayName || '' } })
+}
+
+export async function me(req, res) {
+  const authHeader = req.headers.authorization || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+  if (!token) return res.status(401).json({ message: 'Unauthorized' })
+  try {
+    const payload = jwt.verify(token, env.jwtAccessSecret)
+    res.json({ user: { id: payload.sub } })
+  } catch {
+    res.status(401).json({ message: 'Unauthorized' })
+  }
+}
+
+export async function logout(req, res) {
+  const cookieToken = req.cookies?.refresh_token
+  if (cookieToken) {
+    try {
+      const payload = jwt.verify(cookieToken, env.jwtRefreshSecret)
+      const record = await findRefreshToken({ userId: payload.sub, jti: payload.jti })
+      if (record && !record.revoked) await revokeRefreshToken(record.id)
+    } catch {}
+  }
+  res.clearCookie('refresh_token', { path: '/' })
+  res.status(204).end()
 }

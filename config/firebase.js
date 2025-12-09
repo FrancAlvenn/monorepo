@@ -8,6 +8,9 @@ if (env.firebaseProjectId && env.firebaseClientEmail && env.firebasePrivateKey) 
       projectId: env.firebaseProjectId,
       clientEmail: env.firebaseClientEmail,
       privateKey: env.firebasePrivateKey.replace(/\\n/g, '\n'),
+      apiKey: env.firebaseApiKey,
+      authDomain: env.firebaseAuthDomain,
+      appId: env.firebaseAppId,
     }),
   })
 }
