@@ -22,10 +22,10 @@ export async function getUserByEmail(email) {
   return { id: doc.id, ...doc.data() }
 }
 
-export async function createUser({ email, password }) {
+export async function createUser({ email, password, displayName }) {
   const salt = await bcrypt.genSalt(10)
   const hashed = await bcrypt.hash(password, salt)
-  const data = { email, password: hashed, failedAttempts: 0, lockoutUntil: null, createdAt: Date.now() }
+  const data = { email, password: hashed, displayName: displayName || '', failedAttempts: 0, lockoutUntil: null, createdAt: Date.now() }
   if (useMem()) {
     const id = uuidv4()
     mem.users.set(id, { id, ...data })

@@ -56,7 +56,7 @@ export async function login(req, res) {
     maxAge: rtExp - Date.now(),
     path: '/',
   })
-  res.json({ accessToken, expiresAt: expires, user: { id: user.id, email: user.email } })
+  res.json({ accessToken, expiresAt: expires, user: { id: user.id, email: user.email, displayName: user.displayName || '' } })
 }
 
 export async function refresh(req, res) {
@@ -96,7 +96,7 @@ export async function signup(req, res) {
   if (!validatePassword(password)) return res.status(400).json({ message: 'Weak password' })
   const existing = await getUserByEmail(email)
   if (existing) return res.status(409).json({ message: 'Email already in use' })
-  const user = await createUser({ email, password })
+  const user = await createUser({ email, password, displayName })
   res.status(201).json({ user: { id: user.id, email: user.email, displayName: displayName || '' } })
 }
 
