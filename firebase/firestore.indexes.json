@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "refreshTokens",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "jti", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
