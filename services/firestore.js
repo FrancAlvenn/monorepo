@@ -12,6 +12,18 @@ function useMem() {
   return !firestore
 }
 
+// Create default users
+export async function createDefaultUsers() {
+  if (!useMem()) return
+  const users = [
+    { email: 'test@example.com', password: 'Password123-', displayName: 'User One', failedAttempts: 0, lockoutUntil: null, createdAt: Date.now() },
+    { email: 'admin@example.com', password: 'Admin123-', displayName: 'Admin User', failedAttempts: 0, lockoutUntil: null, createdAt: Date.now() },
+  ]
+  for (const user of users) {
+    await createUser(user)
+  }
+}
+
 export async function getUserByEmail(email) {
   if (useMem()) {
     const u = [...mem.users.values()].find((x) => x.email === email)
