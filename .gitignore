@@ -3,3 +3,11 @@ node_modules/
 coverage/
 dist/
 logs/
+
+# Environment variables
+.env
+.env.test
+.env.development
+.env.production
+.env.staging
+.env.template

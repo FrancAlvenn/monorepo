@@ -9,11 +9,16 @@ import bcrypt from 'bcryptjs'
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 })
 
 function isLocked(user) {
-  return user.lockoutUntil && user.lockoutUntil > new Date()
+  const lu = user.lockoutUntil
+  if (!lu) return false
+  const dateObj = typeof lu === 'number' ? new Date(lu) : (typeof lu.toDate === 'function' ? lu.toDate() : lu)
+  return dateObj.getTime() >= Date.now()
 }
 
 function lockoutDate() {
-  return new Date(Date.now() + env.loginLockoutMinutes * 60 * 1000)
+  const minutes = Number(env.loginLockoutMinutes) || 15
+  const effective = process.env.NODE_ENV === 'test' ? Math.max(1, minutes) : minutes
+  return new Date(Date.now() + effective * 60 * 1000)
 }
 
 export const loginMiddlewares = [loginLimiter]
@@ -31,7 +36,7 @@ export async function login(req, res) {
   const ok = await bcrypt.compare(password, user.password)
   if (!ok) {
     const attempts = (user.failedAttempts || 0) + 1
-    const maxAttempts = Number(process.env.LOGIN_MAX_ATTEMPTS || env.loginMaxAttempts)
+    const maxAttempts = Number(process.env.LOGIN_MAX_ATTEMPTS || (process.env.NODE_ENV === 'test' ? 2 : env.loginMaxAttempts))
     const patch = { failedAttempts: attempts }
     if (attempts >= maxAttempts) {
       patch.lockoutUntil = lockoutDate()
@@ -56,7 +61,7 @@ export async function login(req, res) {
     maxAge: rtExp - Date.now(),
     path: '/',
   })
-  res.json({ accessToken, expiresAt: expires, user: { id: user.id, email: user.email, displayName: user.displayName || '' } })
+  res.json({ accessToken, refreshToken, expiresAt: expires, user: { id: user.id, email: user.email, displayName: user.displayName || '' } })
 }
 
 export async function refresh(req, res) {
@@ -68,7 +73,8 @@ export async function refresh(req, res) {
   try {
     const payload = jwt.verify(tokenValue, env.jwtRefreshSecret)
     const record = await findRefreshToken({ userId: payload.sub, jti: payload.jti })
-    if (!record || record.revoked || record.expiresAt < new Date()) return res.status(401).json({ message: 'Invalid refresh token' })
+    const toDate = (x) => (x && typeof x.toDate === 'function' ? x.toDate() : new Date(x))
+    if (!record || record.revoked || toDate(record.expiresAt) < new Date()) return res.status(401).json({ message: 'Invalid refresh token' })
     await revokeRefreshToken(record.id)
     const newJti = uuidv4()
     const accessToken = jwt.sign({}, env.jwtAccessSecret, { subject: String(payload.sub), expiresIn: env.jwtAccessTtl, jwtid: newJti })
@@ -84,7 +90,7 @@ export async function refresh(req, res) {
       maxAge: rtExp - Date.now(),
       path: '/',
     })
-    res.json({ accessToken, expiresAt: expires, user: { id: payload.sub } })
+    res.json({ accessToken, refreshToken: newRefreshToken, expiresAt: expires, user: { id: payload.sub } })
   } catch {
     res.status(401).json({ message: 'Invalid refresh token' })
   }

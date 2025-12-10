@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid'
 const mem = {
   users: new Map(),
   refreshTokens: new Map(),
+  ipSearches: new Map(),
 }
 
 function useMem() {
@@ -81,4 +82,54 @@ export async function revokeRefreshToken(id) {
     return
   }
   await firestore.collection('refreshTokens').doc(id).set({ revoked: true }, { merge: true })
+}
+
+// IP Search History (Firestore)
+export async function addIpSearchRecord({ userId, searchedIP, geolocationData, timestamp }) {
+  const data = { userId, searchedIP, geolocationData, timestamp: timestamp || Date.now() }
+  if (useMem()) {
+    const id = uuidv4()
+    mem.ipSearches.set(id, { id, ...data })
+    return { id, ...data }
+  }
+  const ref = await firestore.collection('ip_search_history').add(data)
+  return { id: ref.id, ...data }
+}
+
+export async function getIpSearchHistory({ userId, limit = 50 }) {
+  if (useMem()) {
+    const items = [...mem.ipSearches.values()].filter((x) => x.userId === userId)
+    return items.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit)
+  }
+  const snapshot = await firestore
+    .collection('ip_search_history')
+    .where('userId', '==', userId)
+    .orderBy('timestamp', 'desc')
+    .limit(limit)
+    .get()
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
+}
+
+export async function deleteIpSearchByIds({ userId, ids }) {
+  if (!Array.isArray(ids) || ids.length === 0) return 0
+  if (useMem()) {
+    let count = 0
+    for (const id of ids) {
+      const rec = mem.ipSearches.get(id)
+      if (rec && rec.userId === userId) {
+        mem.ipSearches.delete(id)
+        count++
+      }
+    }
+    return count
+  }
+  let deleted = 0
+  const batch = firestore.batch()
+  for (const id of ids) {
+    const docRef = firestore.collection('ip_search_history').doc(String(id))
+    batch.delete(docRef)
+    deleted++
+  }
+  await batch.commit()
+  return deleted
 }

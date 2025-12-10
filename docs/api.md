@@ -15,6 +15,14 @@
 - `GET /api/ping` → `{ message: 'pong' }`
 - `GET /api/csrf` → `{ csrfToken }` and sets `XSRF-TOKEN` cookie
 
+### IP Geo
+- `GET /api/ip/current` → `{ ip, geo }`
+- `GET /api/ip/lookup?ip=1.2.3.4` → `{ ip, geo }`
+- `GET /api/ip/history` → `{ items }`
+- `POST /api/ip/history/delete` body `{ ids: string[] }` → `{ deleted }`
+
+Backend integrates with `https://ipinfo.io/geo` (and `/{ip}/geo`) and returns a normalized `geo` shape compatible with the previous API.
+
 ## Setup
 1. Copy `.env.template` to `.env` and set `PORT`, `CLIENT_ORIGIN`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`.
 2. Install dependencies: `npm install`

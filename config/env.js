@@ -16,4 +16,5 @@ export const env = {
   firebaseApiKey: process.env.FIREBASE_API_KEY || '',
   firebaseAuthDomain: process.env.FIREBASE_AUTH_DOMAIN || '',
   firebaseAppId: process.env.FIREBASE_APP_ID || '',
+  ipinfoToken: process.env.IPINFO_TOKEN || '',
 }
