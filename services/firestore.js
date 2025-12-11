@@ -1,4 +1,5 @@
 import { firestore } from '../config/firebase.js'
+import { env } from '../config/env.js'
 import bcrypt from 'bcryptjs'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -9,15 +10,15 @@ const mem = {
 }
 
 function useMem() {
-  return !firestore
+  return env.nodeEnv === 'development' || !firestore
 }
 
 // Create default users
 export async function createDefaultUsers() {
   if (!useMem()) return
   const users = [
-    { email: 'test@example.com', password: 'Password123-', displayName: 'User One', failedAttempts: 0, lockoutUntil: null, createdAt: Date.now() },
-    { email: 'admin@example.com', password: 'Admin123-', displayName: 'Admin User', failedAttempts: 0, lockoutUntil: null, createdAt: Date.now() },
+    { email: 'test@gmail.com', password: 'Password123-', displayName: 'User One', failedAttempts: 0, lockoutUntil: null, createdAt: Date.now() },
+    { email: 'admin@gmail.com', password: 'Admin123-', displayName: 'Admin User', failedAttempts: 0, lockoutUntil: null, createdAt: Date.now() },
   ]
   for (const user of users) {
     await createUser(user)
@@ -96,14 +97,35 @@ export async function revokeRefreshToken(id) {
   await firestore.collection('refreshTokens').doc(id).set({ revoked: true }, { merge: true })
 }
 
-// IP Search History (Firestore)
 export async function addIpSearchRecord({ userId, searchedIP, geolocationData, timestamp }) {
   const data = { userId, searchedIP, geolocationData, timestamp: timestamp || Date.now() }
+  
   if (useMem()) {
+    const existing = [...mem.ipSearches.values()].find(
+      (rec) => rec.userId === userId && rec.searchedIP === searchedIP
+    )
+    if (existing) {
+      mem.ipSearches.set(existing.id, { ...existing, timestamp: data.timestamp })
+      return existing
+    }
     const id = uuidv4()
     mem.ipSearches.set(id, { id, ...data })
     return { id, ...data }
   }
+
+  const existingQuery = await firestore
+    .collection('ip_search_history')
+    .where('userId', '==', userId)
+    .where('searchedIP', '==', searchedIP)
+    .limit(1)
+    .get()
+
+  if (!existingQuery.empty) {
+    const doc = existingQuery.docs[0]
+    await doc.ref.update({ timestamp: data.timestamp })
+    return { id: doc.id, ...doc.data(), timestamp: data.timestamp }
+  }
+
   const ref = await firestore.collection('ip_search_history').add(data)
   return { id: ref.id, ...data }
 }
@@ -113,35 +135,54 @@ export async function getIpSearchHistory({ userId, limit = 50 }) {
     const items = [...mem.ipSearches.values()].filter((x) => x.userId === userId)
     return items.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit)
   }
-  const snapshot = await firestore
-    .collection('ip_search_history')
-    .where('userId', '==', userId)
-    .orderBy('timestamp', 'desc')
-    .limit(limit)
-    .get()
-  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
+  try {
+    const snapshot = await firestore
+      .collection('ip_search_history')
+      .where('userId', '==', userId)
+      .orderBy('timestamp', 'desc')
+      .limit(limit)
+      .get()
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
+  } catch (e) {
+    console.error('getIpSearchHistory failed', { userId, error: e?.message })
+    throw e
+  }
 }
 
 export async function deleteIpSearchByIds({ userId, ids }) {
   if (!Array.isArray(ids) || ids.length === 0) return 0
+  ids = ids.map(String) // Ensure all IDs are strings
+
   if (useMem()) {
     let count = 0
     for (const id of ids) {
       const rec = mem.ipSearches.get(id)
-      if (rec && rec.userId === userId) {
+      if (rec && String(rec.userId) === String(userId)) {
         mem.ipSearches.delete(id)
         count++
       }
     }
     return count
   }
+
   let deleted = 0
-  const batch = firestore.batch()
-  for (const id of ids) {
-    const docRef = firestore.collection('ip_search_history').doc(String(id))
-    batch.delete(docRef)
-    deleted++
+  try {
+    await firestore.runTransaction(async (tx) => {
+      const refs = ids.map((id) => firestore.collection('ip_search_history').doc(id))
+      const snaps = await Promise.all(refs.map((ref) => tx.get(ref)))
+
+      for (let i = 0; i < snaps.length; i++) {
+        const snap = snaps[i]
+        if (!snap.exists) continue
+        const data = snap.data()
+        if (String(data.userId) !== String(userId)) continue
+        tx.delete(refs[i])
+        deleted++
+      }
+    })
+    return deleted
+  } catch (e) {
+    console.error('deleteIpSearchByIds failed:', e)
+    throw new Error('Failed to delete records')
   }
-  await batch.commit()
-  return deleted
 }

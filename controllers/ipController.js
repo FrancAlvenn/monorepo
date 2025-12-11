@@ -98,10 +98,14 @@ export async function history(req, res) {
   const userId = getUserId(req)
   if (!userId) return res.status(401).json({ message: 'Unauthorized' })
   try {
-    const items = await getIpSearchHistory({ userId, limit: 50 })
-    res.json({ items })
+    const limit = Number(String(req.query?.limit || '50'))
+    if (Number.isNaN(limit) || limit <= 0 || limit > 200) return res.status(400).json({ message: 'Invalid limit' })
+    const items = await getIpSearchHistory({ userId, limit })
+    res.status(200).json({ items })
   } catch (e) {
-    res.status(500).json({ message: 'Failed to load history' })
+    console.error('history load failed', { userId, error: e?.message, stack: e?.stack })
+    const msg = e?.message?.includes('index') ? 'Database index missing for history query' : 'Failed to load history'
+    res.status(500).json({ message: msg })
   }
 }
 
@@ -109,10 +113,13 @@ export async function deleteSelected(req, res) {
   const userId = getUserId(req)
   if (!userId) return res.status(401).json({ message: 'Unauthorized' })
   try {
-    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((x) => String(x)) : []
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((x) => String(x)).filter(Boolean) : []
+    if (ids.length === 0) return res.status(400).json({ message: 'No ids provided' })
     const deleted = await deleteIpSearchByIds({ userId, ids })
-    res.json({ deleted })
+    const items = await getIpSearchHistory({ userId, limit: 50 })
+    res.status(200).json({ deleted, items })
   } catch (e) {
+    console.error('history delete failed', { userId, error: e?.message, stack: e?.stack })
     res.status(500).json({ message: 'Failed to delete' })
   }
 }

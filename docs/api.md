@@ -16,12 +16,16 @@
 - `GET /api/csrf` → `{ csrfToken }` and sets `XSRF-TOKEN` cookie
 
 ### IP Geo
-- `GET /api/ip/current` → `{ ip, geo }`
-- `GET /api/ip/lookup?ip=1.2.3.4` → `{ ip, geo }`
-- `GET /api/ip/history` → `{ items }`
-- `POST /api/ip/history/delete` body `{ ids: string[] }` → `{ deleted }`
+- `GET /api/ip/current` → `200 { ip, geo }` or `502 { message }`
+- `GET /api/ip/lookup?ip=1.2.3.4` → `200 { ip, geo }` or `400 { message }` or `502 { message }`
+- `GET /api/ip/history?limit=50` → `200 { items }` or `400 { message }` or `500 { message }`
+- `POST /api/ip/history/delete` body `{ ids: string[] }` → `200 { deleted, items }` or `400 { message }` or `500 { message }`
 
 Backend integrates with `https://ipinfo.io/geo` (and `/{ip}/geo`) and returns a normalized `geo` shape compatible with the previous API.
+
+Notes:
+- History retrieval requires a composite Firestore index on `ip_search_history` with fields (`userId` ASC, `timestamp` DESC). See `firebase/firestore.indexes.json`.
+- Deletion operation is executed atomically within a Firestore transaction and only removes documents that belong to the authenticated user.
 
 ## Setup
 1. Copy `.env.template` to `.env` and set `PORT`, `CLIENT_ORIGIN`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`.

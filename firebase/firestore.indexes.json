@@ -7,6 +7,14 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "jti", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "ip_search_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
