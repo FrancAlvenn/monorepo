@@ -83,11 +83,13 @@ export async function current(req, res) {
 export async function lookup(req, res) {
   const userId = getUserId(req)
   if (!userId) return res.status(401).json({ message: 'Unauthorized' })
-  const q = sanitize(req.query.ip)
+  const q = sanitize(req.method === 'POST' ? req.body?.ip : req.query.ip)
   if (!isValidIpOrDomain(q)) return res.status(400).json({ message: 'Invalid IP or domain' })
   try {
     const geo = await fetchGeo(q)
-    await addIpSearchRecord({ userId, searchedIP: geo.query, geolocationData: geo, timestamp: Date.now() })
+    if (req.method === 'POST') {
+      await addIpSearchRecord({ userId, searchedIP: geo.query, geolocationData: geo, timestamp: Date.now() })
+    }
     res.json({ ip: geo.query, geo })
   } catch (e) {
     res.status(502).json({ message: e.message || 'Lookup failed' })

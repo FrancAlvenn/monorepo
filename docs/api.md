@@ -15,11 +15,11 @@
 - `GET /api/ping` → `{ message: 'pong' }`
 - `GET /api/csrf` → `{ csrfToken }` and sets `XSRF-TOKEN` cookie
 
-### IP Geo
 - `GET /api/ip/current` → `200 { ip, geo }` or `502 { message }`
-- `GET /api/ip/lookup?ip=1.2.3.4` → `200 { ip, geo }` or `400 { message }` or `502 { message }`
+- `POST /api/ip/lookup` body `{ ip }` with header `x-xsrf-token` → `200 { ip, geo }` or `400 { message }` or `502 { message }`
+- `GET /api/ip/lookup?ip=1.2.3.4` (deprecated; read-only) → `200 { ip, geo }` or `400 { message }` or `502 { message }`
 - `GET /api/ip/history?limit=50` → `200 { items }` or `400 { message }` or `500 { message }`
-- `POST /api/ip/history/delete` body `{ ids: string[] }` → `200 { deleted, items }` or `400 { message }` or `500 { message }`
+- `POST /api/ip/history/delete` body `{ ids: string[] }` with header `x-xsrf-token` → `200 { deleted, items }` or `400 { message }` or `500 { message }`
 
 Backend integrates with `https://ipinfo.io/geo` (and `/{ip}/geo`) and returns a normalized `geo` shape compatible with the previous API.
 
@@ -43,13 +43,17 @@ Notes:
  - `models/` — `User`, `RefreshToken`
 
 ## Notes
-- CORS allowed for client origin in `.env`.
+- CORS configured to allow the authorized frontend origin in `.env` (`CLIENT_ORIGIN`), with credentials enabled and headers whitelisted (`Content-Type`, `Authorization`, `x-xsrf-token`, `x-csrf-token`, `x-refresh-token`).
 - Body parsing enabled via `body-parser`.
- - CSRF protection via cookie-based token on `/api/login` and `/api/refresh`.
+- CSRF protection via cookie-based tokens:
+  - Server sets secret `_csrf` cookie (`HttpOnly`, `SameSite=None`, `Secure` in production).
+  - Server exposes `GET /api/csrf` which returns `{ csrfToken }` and sets `XSRF-TOKEN` cookie (`SameSite=None`, `Secure` in production).
+  - All state-changing endpoints require header `x-xsrf-token` with the value from `/api/csrf`.
+  - CSRF failures return `403 { message: 'Invalid CSRF token' }`.
 
 ### Authentication
 - `POST /api/login` body `{ email, password }` with header `x-xsrf-token`
-  - sets HTTP-only `refresh_token` cookie
+  - sets HTTP-only `refresh_token` cookie (`SameSite=None`, `Secure` in production)
   - returns `{ accessToken, expiresAt, user }`
 - `POST /api/refresh` with header `x-xsrf-token` and refresh token from cookie
   - rotates refresh token (cookie) and returns `{ accessToken, expiresAt, user }`

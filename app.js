@@ -9,7 +9,15 @@ import { createDefaultUsers } from './services/firestore.js'
 import createIndexes from './utils/createIndexes.js'
 
 const app = express()
-app.use(cors({ origin: env.clientOrigin, credentials: true }))
+app.set('trust proxy', 1)
+app.use(
+  cors({
+    origin: env.clientOrigin,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-xsrf-token', 'x-csrf-token', 'x-refresh-token'],
+  })
+)
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }))
 app.use(cookieParser())
